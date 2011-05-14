@@ -5,6 +5,10 @@
 </script>
 </head>
 <body>
-
+<?php
+for($i=0;$i<24;$i++){
+echo "<p>Hello world</p>";
+}
+?>
 </body>
 </html>
