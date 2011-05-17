@@ -1,0 +1,17 @@
+<html>
+<head>
+<title>ALIRC</title>
+<script type="text/javascript" src="ircfunctions.js"></script>
+</head>
+<body>
+<object classid="clsid:D27CDB6E-AE6D-11cf-96B8-444553540000" codebase="http://download.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=5,0,0,0" width="1" height="1" id="xmlsocket">
+<param name="movie" value="ircsocket.swf">
+<param name="allowScriptAccess" value="always">
+<param name="quality" value="high">
+<embed src="ircsocket.swf" quality="high" style="width:1px;height:1px;" type="application/x-shockwave-flash" pluginspage="http://www.macromedia.com/shockwave/download/index.cgi?P1_Prod_Version=ShockwaveFlash" name="xmlsocket" swLiveConnect="true">
+</embed>
+</object>
+<p>Nick: <input type="text" value="Bob" id="nick"><input type="button" value="Start" onclick="socket.connect()"></p>
+<div id="msg"><br><br></div>
+</body>
+</html>
