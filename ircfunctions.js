@@ -44,6 +44,12 @@ function ircdata(data){
                 addMessage(params[2],colorize(userhost[0])+" has kicked "+colorize(params[3])+" from "+params[2]+" ("+message+")");
             }
         break;
+        case "NICK":
+            if(isMe(userhost[0])){
+                irc.nick = message;
+            }
+
+        break;
         case "NOTICE":
             addMessage(currentwin.win.chanstuff["input"].sendto,colorize(userhost[0])+" (=>"+params[2]+"<=): "+message);
         break;
@@ -67,6 +73,20 @@ function ircdata(data){
                 gettarget(userhost[0]).chanstuff["userhost"].innerHTML = params[0];
             }else{
                 addMessage(params[2],colorize(userhost[0])+": "+message);
+            }
+        break;
+        case "QUIT":
+            var target = null;
+            var u = userhost[0].toLowerCase();
+            for(var t in targetmap){
+                target = targetmap[t];
+                if(target.chanstuff.input.sendto.toLowerCase()==u)
+                    addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") has quit ("+message+")");
+                if(!is_chan(target.chanstuff.input.sendto)) continue;
+                if(removeUser(target,userhost[0])){
+                    updateUsers(target);
+                    addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") has quit ("+message+")",false,true);
+                }
             }
         break;
 		/* Show message, nothing else */
@@ -102,6 +122,9 @@ function ircdata(data){
                     break;
                     case 'NETWORK':
                         irc.server = keyval[1];                        
+                    break;
+                    case 'CHANTYPES':
+                        irc.chantype = keyval[1];
                     break;
                 }
             }
@@ -250,7 +273,9 @@ window.removeUser = function(chan,user){
 window.timepad = function(number) {
     return (number < 10) ? '0'+number : number;
 }
-
+window.is_chan = function(nam){
+return !!(nam.substring(0,1)==irc.chantype);
+}
 
 
 
@@ -470,6 +495,7 @@ usercont.style.border = ui["sepborder"];
 usercont.style.width = "75px";
 topicdiv.style.top = "18px";
 topicdiv.style.height = "18px";
+topicdiv.style.overflow = "hidden";
 output.style.top = "36px";
 output.style.overflowY = "scroll";
 output.style.overflowX = "auto";
@@ -622,7 +648,7 @@ raw("PART "+win.chanstuff.input.sendto);
 
 
 window.socket = {"test":'f',"var":{}};
-window.irc = {"nick":"unknown","chmodegrps":["beI","kfL","lj","psmntirRcOAQKVCuzNSMTG"],"chstatus":["~&@%+"],"chstatusreg":/([~&@%+]*)(.+)/,"server":"SERVER"}
+window.irc = {"nick":"unknown","chmodegrps":["beI","kfL","lj","psmntirRcOAQKVCuzNSMTG"],"chstatus":["~&@%+"],"chstatusreg":/([~&@%+]*)(.+)/,"server":"SERVER","chantype":"#"}
 function getSwf() {
 if (navigator.appName.indexOf ("Microsoft") !=-1) {
 return window["xmlsocket"];
