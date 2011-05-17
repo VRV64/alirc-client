@@ -24,23 +24,28 @@ function ircdata(data){
         case "JOIN":
             if(isMe(userhost[0])){
                 raw("MODE "+message);
+                addMessage(message,"You have joined "+message);
             } else{
                 var chan = gettarget(message);
                 chan.chanstuff.users.push([userhost[0],""]);
                 updateUsers(chan);
-                addMessage(message,colorize(userhost[0])+" has joined "+message);
+                addMessage(message,colorize(userhost[0])+" ("+ params[0] +") has joined "+message);
+            }
+        break;
+        case "KICK":
+            if(isMe(params[3])){
+                var chan = gettarget(params[2]);
+                addMessage(params[2],"You have been kicked from "+params[2]+" by "+colorize(userhost[0])+" ("+message+")");
+                addMessage(params[2],"<hr>",true,true);
+            } else {
+                var chan = gettarget(params[2]);
+                removeUser(chan,params[3]);
+                updateUsers(chan);
+                addMessage(params[2],colorize(userhost[0])+" has kicked "+colorize(params[3])+" from "+params[2]+" ("+message+")");
             }
         break;
         case "NOTICE":
             addMessage(currentwin.win.chanstuff["input"].sendto,colorize(userhost[0])+" (=>"+params[2]+"<=): "+message);
-        break;
-        case "PRIVMSG":
-            if(isMe(params[2])){
-                addMessage(userhost[0],colorize(userhost[0])+": "+message);
-                gettarget(userhost[0]).chanstuff["userhost"].innerHTML = params[0];
-            }else{
-                addMessage(params[2],colorize(userhost[0])+": "+message);
-            }
         break;
         case "PART":
             var reason = "";
@@ -48,12 +53,20 @@ function ircdata(data){
             if(isMe(userhost[0])){
                 var chan = gettarget(params[2]);
                 addMessage(params[2],"You have left "+params[2]+reason);
-                addMessage(params[2],"<hr>");
+                addMessage(params[2],"<hr>",true);
             } else {
                 var chan = gettarget(params[2]);
                 removeUser(chan,userhost[0]);
                 updateUsers(chan);
-                addMessage(params[2],colorize(userhost[0])+" has left "+params[2]+reason);
+                addMessage(params[2],colorize(userhost[0])+" ("+ params[0] +") has left "+params[2]+reason);
+            }
+        break;
+        case "PRIVMSG":
+            if(isMe(params[2])){
+                addMessage(userhost[0],colorize(userhost[0])+": "+message);
+                gettarget(userhost[0]).chanstuff["userhost"].innerHTML = params[0];
+            }else{
+                addMessage(params[2],colorize(userhost[0])+": "+message);
             }
         break;
 		/* Show message, nothing else */
@@ -98,6 +111,10 @@ function ircdata(data){
 		case "254":
 			addMessage(irc.server,param[2].concat(" ",message));
 		break;
+        /* Show to current window */
+        case "404":
+            addMessage(currentwin.win.chanstuff["input"].sendto,message);
+        break;
         case "324"://mode [chmode list]
             var chan = gettarget(params[3]);
             chan.chanstuff.mode.innerHTML = "["+params[4]+"] ";
@@ -137,10 +154,12 @@ window.isMe = function(nick){
 if(nick.toLowerCase()==irc['nick'].toLowerCase()) return true;
 return false;
 }
-function addMessage(nam,html){
+function addMessage(nam,html,hideTime,noCount){
     var p = document.createElement("p");
     var d = new Date();
-    p.innerHTML = "[".concat(timepad(d.getHours()),":",timepad(d.getMinutes()),"] ",html);
+    if(!hideTime)
+        p.innerHTML = "[".concat(timepad(d.getHours()),":",timepad(d.getMinutes()),"] ");
+    p.innerHTML += html;
     p.style.margin = "0px";
     p.style.fontSize = "12px";
     var target = gettarget(nam);
@@ -148,6 +167,7 @@ function addMessage(nam,html){
     var willScroll = (output.clientHeight+output.scrollTop >= output.scrollHeight);
     output.appendChild(p);
     if(willScroll) output.scrollTop = output.scrollHeight-output.clientHeight;
+    if(!!noCount) return;
     if(currentwin!=target.cont){
         if(!target.msgs.innerHTML) target.msgs.innerHTML = "(1)";
         else target.msgs.innerHTML = "("+(parseInt(target.msgs.innerHTML.substring(1))+1)+")";
