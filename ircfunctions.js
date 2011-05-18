@@ -44,22 +44,53 @@ function ircdata(data){
                 addMessage(params[2],colorize(userhost[0])+" has kicked "+colorize(params[3])+" from "+params[2]+" ("+message+")");
             }
         break;
+        case "MODE":
+            if(isMe(userhost[0])){
+                addMessage(irc.server,"User modes: "+message);
+            }
+            console.log(data);
+            
+        break;
         case "NICK":
             if(isMe(userhost[0])){
                 irc.nick = message;
             }
+            var target = null;
+            var user = userhost[0].toLowerCase();
+            for(var t in targetmap){
+                target = targetmap[t];
+                if(target.chanstuff.input.sendto.toLowerCase()==user){
+                    addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") is now known as "+colorize(message));
+                    targetmap[message.toLowerCase()] = target;
+                    target.title.titlespan = 
+                    delete targetmap[t];
+                    continue;
+                    }
+                if(!is_chan(target.chanstuff.input.sendto)) continue;
+                for(var u in target.chanstuff.users){
+                    if(target.chanstuff.users[u][0].toLowerCase()==user){
+                        target.chanstuff.users[u][0] = message;
+                        addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") is now known as "+colorize(message),false,true);
+                        updateUsers(target);
+                        break;
+                    }
+                }
+            }
 
         break;
         case "NOTICE":
-            addMessage(currentwin.win.chanstuff["input"].sendto,colorize(userhost[0])+" (=>"+params[2]+"<=): "+message);
+            if(params[2]!="AUTH")
+                addMessage(currentwin.win.chanstuff["input"].sendto,colorize(userhost[0])+" (=>"+params[2]+"<=): "+message);
         break;
         case "PART":
             var reason = "";
             if(message) reason = " ("+message+")";
             if(isMe(userhost[0])){
-                var chan = gettarget(params[2]);
-                addMessage(params[2],"You have left "+params[2]+reason);
-                addMessage(params[2],"<hr>",true);
+                if(targetmap[params[2].toLowerCase()]){
+                    var chan = gettarget(params[2]);
+                    addMessage(params[2],"You have left "+params[2]+reason);
+                    addMessage(params[2],"<hr>",true);
+                }
             } else {
                 var chan = gettarget(params[2]);
                 removeUser(chan,userhost[0]);
@@ -88,6 +119,14 @@ function ircdata(data){
                     addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") has quit ("+message+")",false,true);
                 }
             }
+        break;
+        case "TOPIC":
+            addMessage(params[2],colorize(userhost[0])+" has changed the topic to: "+message);
+            var chan = gettarget(params[2]);
+            chan.chanstuff.topic.innerHTML = message;
+            var d = new Date();
+            chan.chanstuff.topic.parentNode.setAttribute("title","Topic set by "+userhost[0]+" on "+d.toLocaleString());
+            
         break;
 		/* Show message, nothing else */
 		case "251"://lusers
@@ -132,17 +171,46 @@ function ircdata(data){
 		/* Param[2] + message */
 		case "252":
 		case "254":
-			addMessage(irc.server,param[2].concat(" ",message));
+			addMessage(irc.server,params[2].concat(" ",message));
 		break;
         /* Show to current window */
         case "404":
             addMessage(currentwin.win.chanstuff["input"].sendto,message);
         break;
+        case "321":// init /list
+            irc.channellist = [];
+        break;
+        case "322":
+            //addMessage("Channels List",params[3]+" ("+params[4]+") "+message,true,true);
+            irc.channellist.push({"name":params[3],"users":params[4],"topic":message});
+        break;
+        case "323"://end /list
+            var target = gettarget("Channels List");
+            clearlines(target);
+            if(target.chanstuff.input.tagName == "TEXTAREA"){
+                var i = [target.chanstuff.input.style.height,target.chanstuff.input.style.top];
+                var input = document.createElement("div");
+                input.style.height = i[0];
+                input.style.width = "100%";
+                input.style.top = i[1];
+                input.style.position = "absolute";
+                input.style.textAlign = "center";
+                input.innerHTML = "<a href='javascript:sortChanListName();'>Sort by Name</a> | <a href='javascript:sortChanListUser();'>Sort by Users</a> | <a href='javascript:raw(\"list\");'>Refresh List</a>";
+                input.sendto = "channels list";
+                target.replaceChild(input,target.chanstuff.input);
+                delete target.chanstuff.input;
+                target.chanstuff.input = input;
+            }
+            irc.channellist.sort(chanNameCmp);
+            for(var c in irc.channellist){
+                addMessage("Channels List",irc.channellist[c]["name"]+" ("+irc.channellist[c]["users"]+") "+irc.channellist[c]["topic"],true,true);
+            }
+        break;
         case "324"://mode [chmode list]
             var chan = gettarget(params[3]);
             chan.chanstuff.mode.innerHTML = "["+params[4]+"] ";
         break;
-        case "329"://topic setter
+        case "329"://mode modified
             var chan = gettarget(params[3]);
             var d = new Date(parseInt(params[4])*1000);
             chan.chanstuff.topic.parentNode.setAttribute("title","Mode changed on "+d.toLocaleString());
@@ -150,6 +218,7 @@ function ircdata(data){
         case "332"://topic
             var chan = gettarget(params[3]);
             chan.chanstuff.topic.innerHTML = message;
+            addMessage(params[3],"The topic in "+params[3]+" is currently: "+message);
         break;
         case "333"://topic setter
             var chan = gettarget(params[3]);
@@ -276,7 +345,53 @@ window.timepad = function(number) {
 window.is_chan = function(nam){
 return !!(nam.substring(0,1)==irc.chantype);
 }
-
+window.chanNameCmp = function(a, b) {
+var A = a["name"].toLowerCase();
+var B = b["name"].toLowerCase();
+if (A < B) {return -1}
+if (A > B) {return 1}
+return 0;
+}
+window.chanUsersCmp = function(a, b) {
+var A = parseInt(a["users"]);
+var B = parseInt(b["users"]);
+return A-B;
+}
+window.sortChanListName = function(){
+    var target = gettarget("Channels List");
+    clearlines(target);
+    irc.channellist.sort(chanNameCmp);
+    for(var c in irc.channellist){
+        addMessage("Channels List",irc.channellist[c]["name"]+" ("+irc.channellist[c]["users"]+") "+irc.channellist[c]["topic"],true,true);
+    }
+}
+window.sortChanListUser = function(){
+    var target = gettarget("Channels List");
+    clearlines(target);
+    irc.channellist.sort(chanUsersCmp);
+    for(var c in irc.channellist){
+        addMessage("Channels List",irc.channellist[c]["name"]+" ("+irc.channellist[c]["users"]+") "+irc.channellist[c]["topic"],true,true);
+    }
+}
+window.altermode = function(mode,delta,userBool){
+    /* apply delta to mode, ie mode: +ix +r -> +ixr */
+    var args = mode.split(" ");
+    var deltargs = delta.split(" ");
+    var base = args.shift();
+    var m = "";
+    var plus = true;
+    var i = -1;
+    for(var b in base){
+        m = base.charAt(b);
+        if(m=="+"){plus=true;continue;}
+        if(m=="-"){plus=false;continue;}
+        if(irc.chmodegrps[3].indexOf(m)>=0 || userBool){
+            i = base.indexOf(m);
+            if(i==-1 && plus) base += m;
+        }
+    }
+    return base+" "+args.join(" ");
+}
 
 
 
@@ -377,6 +492,7 @@ titlemsg = document.createElement("span");
 title.appendChild(titlemsg);
 titlespan = document.createElement("span");
 titlespan.innerHTML = titletext;
+title.titlespan = titlespan;
 title.appendChild(titlespan);
 bind(title,"mousedown",startdrag);
 bind(wincont,"mousedown",wintotop);
@@ -466,6 +582,11 @@ for(i=0;i<40;i++){
 window.clearMsgs = function(win){
     win.msgs.innerHTML = "";
 }
+window.clearlines = function(win){
+    while(win.chanstuff.output.childNodes.length){
+        win.chanstuff.output.removeChild(win.chanstuff.output.firstChild);
+    }
+}
 
 
 /** IRC Window**/
@@ -496,6 +617,7 @@ usercont.style.width = "75px";
 topicdiv.style.top = "18px";
 topicdiv.style.height = "18px";
 topicdiv.style.overflow = "hidden";
+topicdiv.style.fontSize = "12px";
 output.style.top = "36px";
 output.style.overflowY = "scroll";
 output.style.overflowX = "auto";
@@ -555,6 +677,8 @@ topicdiv.style.position = "absolute";
 output.style.border = ui["sepborder"];
 topicdiv.style.top = "18px";
 topicdiv.style.height = "18px";
+topicdiv.style.overflow = "hidden";
+topicdiv.style.fontSize = "12px";
 output.style.top = "36px";
 output.style.width = "100%";
 output.style.overflowY = "scroll";
@@ -591,7 +715,7 @@ tmp = target;
 target = target.toLowerCase();
 if(targetmap[target])
     return targetmap[target];
-if(target.charAt(0)=="#")
+if(target.charAt(0)==irc.chantype)
     return newchanwin(tmp);
 return newuserwin(tmp);
 }
@@ -648,7 +772,7 @@ raw("PART "+win.chanstuff.input.sendto);
 
 
 window.socket = {"test":'f',"var":{}};
-window.irc = {"nick":"unknown","chmodegrps":["beI","kfL","lj","psmntirRcOAQKVCuzNSMTG"],"chstatus":["~&@%+"],"chstatusreg":/([~&@%+]*)(.+)/,"server":"SERVER","chantype":"#"}
+window.irc = {"nick":"unknown","chmodegrps":["beI","kfL","lj","psmntirRcOAQKVCuzNSMTG","qaohv"],"chstatus":["~&@%+"],"chstatusreg":/([~&@%+]*)(.+)/,"server":"SERVER","chantype":"#"}
 function getSwf() {
 if (navigator.appName.indexOf ("Microsoft") !=-1) {
 return window["xmlsocket"];
@@ -720,7 +844,7 @@ socket.close = function(){raw("QUIT");};
 
 window.onload = function(){
 pageLoaded();
-init();
+window.setTimeout(init,1000);
 }
 window.onunload = socket.close;
 window.onblur = function(event){
