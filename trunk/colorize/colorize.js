@@ -1,20 +1,21 @@
 window.hue2rgb = function(deg){
-    /* input: 0-255 */
+    /* input: 0-360 */
     var Hprim = deg/60;
     var C = 255;
     var X = Math.round((1 - Math.abs(Hprim%2 -1))*C);
+    var A = (deg%5)*63;
     if(Hprim<1)
-        return [C,X,0];
+        return [C,X,A];
     if(Hprim<2)
-        return [X,C,0];
+        return [X,C,A];
     if(Hprim<3)
-        return [0,C,X];
+        return [A,C,X];
     if(Hprim<4)
-        return [0,X,C];
+        return [A,X,C];
     if(Hprim<5)
-        return [X,0,C];
+        return [X,A,C];
     if(Hprim<6)
-        return [C,0,X];
+        return [C,A,X];
 }
 window.str2deg = function(str){
     var cnt = 0;
