@@ -45,10 +45,84 @@ function ircdata(data){
             }
         break;
         case "MODE":
-            if(isMe(userhost[0])){
-                addMessage(irc.server,"User modes: "+message);
+            if(isMe(params[2])){
+                addMessage(currentwin.win.chanstuff["input"].sendto,colorize(userhost[0])+" set mode "+message+" on you.");
+            } else {
+                var chan = gettarget(params[2]);
+                var args = chan.chanstuff.mode.innerHTML.split(" ");
+                var deltargs = data.split(" ").slice(3);
+                var total = deltargs.join(" ");
+                var delta = deltargs.shift();
+                var base = args.shift();
+                var m = "";
+                var n = "";
+                var o = 0;
+                var plus = true;
+                var i = -1;
+                var user = "";
+                var needUpdate = false;
+                for(var d in delta){
+                    m = delta.charAt(d);
+                    if(m=="+"){plus=true;continue;}
+                    if(m=="-"){plus=false;continue;}
+                    if(irc.chmodegrps[1].indexOf(m)>=0){
+                        if(plus){base += m; args.push(deltargs.shift());}
+                        else{
+                            o = 0;
+                            for(var b in base){
+                                n = base.charAt(b);
+                                if(n==m)break;
+                                if((irc.chmodegrps[1].indexOf(n)>=0)||(irc.chmodegrps[2].indexOf(n)>=0))o++;
+                            }
+                            base = base.replace(m,"");
+                            args.splice(o,1);
+                            deltargs.shift();
+                        }
+                    }
+                    if(irc.chmodegrps[2].indexOf(m)>=0){
+                        if(plus){base += m; args.push(deltargs.shift());}
+                        else{
+                            o = 0;
+                            for(var b in base){
+                                n = base.charAt(b);
+                                if(n==m)break;
+                                if((irc.chmodegrps[1].indexOf(n)>=0)||(irc.chmodegrps[2].indexOf(n)>=0))o++;
+                            }
+                            base = base.replace(m,"");
+                            args.splice(o,1);
+                        }
+                    }
+                    if(irc.chmodegrps[3].indexOf(m)>=0){
+                        if(plus) base += m;
+                        else base = base.replace(m,"");
+                    }
+                    if(irc.prefix.indexOf(m)>=0){
+                        user = deltargs.shift().toLowerCase();
+                        if(plus){
+                            for(var u in chan.chanstuff.users){
+                                if(chan.chanstuff.users[u][0].toLowerCase()==user){
+                                    n = chan.chanstuff.users[u][1].split("");
+                                    n.push(irc.chstatus.charAt(irc.prefix.indexOf(m)));
+                                    n.sort(sortStatus);
+                                    chan.chanstuff.users[u][1] = n.join("");
+                                    needUpdate = true;
+                                }
+                            }
+                        } else {
+                            for(var u in chan.chanstuff.users){
+                                if(chan.chanstuff.users[u][0].toLowerCase()==user){
+                                    chan.chanstuff.users[u][1] = chan.chanstuff.users[u][1].replace(irc.chstatus.charAt(irc.prefix.indexOf(m)),"");
+                                    needUpdate = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                addMessage(params[2],colorize(userhost[0])+" has set mode "+total);
+                chan.chanstuff.mode.innerHTML = base +" "+ args.join(" ");
+                if(needUpdate) updateUsers(chan);
             }
-            console.log(data);
+            //console.log(data);
             
         break;
         case "NICK":
@@ -80,7 +154,7 @@ function ircdata(data){
         break;
         case "NOTICE":
             if(params[2]!="AUTH")
-                addMessage(currentwin.win.chanstuff["input"].sendto,colorize(userhost[0])+" (=>"+params[2]+"<=): "+message);
+                addMessage(currentwin.win.chanstuff["input"].sendto,colorize(userhost[0])+" (=>"+params[2]+"<=): "+irc2html(message));
         break;
         case "PART":
             var reason = "";
@@ -103,7 +177,7 @@ function ircdata(data){
                 addMessage(userhost[0],colorize(userhost[0])+": "+message);
                 gettarget(userhost[0]).chanstuff["userhost"].innerHTML = params[0];
             }else{
-                addMessage(params[2],colorize(userhost[0])+": "+message);
+                addMessage(params[2],colorize(userhost[0])+": "+irc2html(message));
             }
         break;
         case "QUIT":
@@ -139,6 +213,8 @@ function ircdata(data){
 		break;
 		/* Show nothing at all */
 		case "001":
+            irc.serverlink = userhost[0];
+        break;
 		case "002":
 		case "003":/* 001-004 can't be used because irc.server doesn't exist yet :( */
 		case "004":
@@ -152,9 +228,8 @@ function ircdata(data){
                     case 'CHANMODES':
                         irc.chmodegrps = keyval[1].split(",");
                     break;
-                    case 'STATUSMSG':
-                        irc.chstatus = keyval[1];
-                        irc.chstatusreg = new RegExp("(["+irc.chstatus+"]*)(.+)")
+                    case 'CHANTYPES':
+                        irc.chantype = keyval[1];
                     break;
                     case 'NAMESX':
                         raw("protoctl namesx");// /names will send all statuses
@@ -162,14 +237,18 @@ function ircdata(data){
                     case 'NETWORK':
                         irc.server = keyval[1];                        
                     break;
-                    case 'CHANTYPES':
-                        irc.chantype = keyval[1];
+                    case 'PREFIX':
+                        var pref = keyval[1].match(/\((.*)\)(.*)/);
+                        irc.prefix = pref[1];
+                        irc.chstatus = pref[2];
+                        irc.chstatusreg = new RegExp("(["+irc.chstatus+"]*)(.+)")
                     break;
                 }
             }
         break;
 		/* Param[2] + message */
 		case "252":
+		case "253":
 		case "254":
 			addMessage(irc.server,params[2].concat(" ",message));
 		break;
@@ -203,12 +282,12 @@ function ircdata(data){
             }
             irc.channellist.sort(chanNameCmp);
             for(var c in irc.channellist){
-                addMessage("Channels List",irc.channellist[c]["name"]+" ("+irc.channellist[c]["users"]+") "+irc.channellist[c]["topic"],true,true);
+                addMessage("Channels List",chanLink(irc.channellist[c]["name"])+" ("+irc.channellist[c]["users"]+") "+irc2html(irc.channellist[c]["topic"]),true,true);
             }
         break;
         case "324"://mode [chmode list]
             var chan = gettarget(params[3]);
-            chan.chanstuff.mode.innerHTML = "["+params[4]+"] ";
+            chan.chanstuff.mode.innerHTML = data.split(" ").slice(4).join(" ");
         break;
         case "329"://mode modified
             var chan = gettarget(params[3]);
@@ -218,7 +297,7 @@ function ircdata(data){
         case "332"://topic
             var chan = gettarget(params[3]);
             chan.chanstuff.topic.innerHTML = message;
-            addMessage(params[3],"The topic in "+params[3]+" is currently: "+message);
+            addMessage(params[3],"The topic in "+params[3]+" is currently: "+irc2html(message));
         break;
         case "333"://topic setter
             var chan = gettarget(params[3]);
@@ -280,8 +359,116 @@ function addMessage(nam,html,hideTime,noCount){
     if(willScroll) output.scrollTop = output.scrollHeight-output.clientHeight;
     /*return p;*/
 }
+window.mirc_colors = ["#ffffff", "#000000", "#000088", "#008800", "#ff0000", "#A52A2A", "#880088", "#ff8800", "#ffff00", "#00ff00", "#008888", "#00ffff", "#0000ff", "#ff00ff", "#888888", "#cccccc","#ffffff", "#000000", "#000088", "#008800", "#ff0000", "#A52A2A", "#880088", "#ff8800", "#ffff00", "#00ff00", "#008888", "#00ffff", "#0000ff", "#ff00ff", "#888888", "#cccccc"];
+window.colorcheck = {"#ffffff":"", "#000000":"", "#000088":"", "#008800":"", "#ff0000":"", "#A52A2A":"", "#880088":"", "#ff8800":"", "#ffff00":"", "#00ff00":"", "#008888":"", "#00ffff":"", "#0000ff":"", "#ff00ff":"", "#888888":"", "#cccccc":""}
 function irc2html(irctext){
-return irctext;
+    //return irctext;
+    var irctext = irctext.split("");
+    var c = "";
+    var bold = false;
+    var underline = false;
+    var reverses = false;
+    var font = {"on":false,"fg0":-1,"fg1":-1,"bg0":-1,"bg1":-1,"fg":-1,"bg":-1};
+    //console.log(irctext);
+    var skip = 0;
+    for(var t=0;t<irctext.length;t++){
+        if(skip) { 
+            irctext[t] = "";
+            skip--; continue;
+        }
+        c = irctext[t];
+        switch(c){
+            case "":
+                if(bold) c = "</b>";
+                else c = "<b>";
+                bold = !bold;
+            break;
+            case "":
+                if(font.on) { c = "</span>"; font.on = false; }
+                else c = "";
+                var i = t;
+                if(!isNaN(irctext[i+1])){
+                    font.fg0 = irctext[i+1];
+                    i++;
+                    if(!isNaN(irctext[i+1])){
+                        font.fg1 = irctext[i+1];
+                        i++;
+                    }
+                }
+                if(irctext[i+1]==","){
+                    i++;
+                    if(!isNaN(irctext[i+1])){
+                        font.bg0 = irctext[i+1];
+                        i++;
+                        if(!isNaN(irctext[i+1])){
+                            font.bg1 = irctext[i+1];
+                            i++;
+                        }
+                    }
+                }
+                if(font.fg0!=-1){
+                    if(font.fg1!=-1){
+                        font.fg = font.fg0 + font.fg1;
+                    } else {
+                        font.fg = font.fg0;
+                    }
+                    font.on = true;
+                }
+                if(font.bg0!=-1){
+                    if(font.bg1!=-1){
+                        font.bg = font.bg0 + font.bg1;
+                    } else {
+                        font.bg = font.bg0;
+                    }
+                    font.on = true;
+                }
+                if(font.fg) c += "<span style='color:"+mirc_colors[parseInt(font.fg)]+";";
+                if(font.bg) { if(font.fg==-1) c += "<span style='"; c += "background-color:"+mirc_colors[parseInt(font.bg)]+";";}
+                if(font.on) c+= "'>";
+                font.fg0 = font.fg1 = font.bg0 = font.bg1 = -1;
+                skip = i-t;
+            break;
+            case "":
+                if(reverses) {c = "</span>"; reverses = false; break; }
+                if(font.fg==-1)font.fg=0;
+                if(font.bg==-1)font.bg=1;
+                reverses = true;
+                c = "<span style='color:"+mirc_colors[parseInt(font.bg)]+";background-color:"+mirc_colors[parseInt(font.fg)]+";'>";
+            break;
+            case "":
+                if(underline) c = "</u>";
+                else c = "<u>";
+                underline = !underline;
+            break;
+            case "":
+                c = "";
+                if(bold) c += "</b>";
+                if(underline) c += "</u>";
+                if(reverses) c += "</span>";
+                if(font.on) c += "</span>";
+                bold = false;
+                underline = false;
+                reverses = false;
+                font = {"on":false,"fg0":-1,"fg1":-1,"bg0":-1,"bg1":-1,"fg":-1,"bg":-1};
+            break;
+        }
+        irctext[t] = c;
+    }   
+    c = "";
+    if(bold) c += "</b>";
+    if(underline) c += "</u>";
+    if(reverses) c += "</span>";
+    if(font.on) c += "</span>";
+    irctext = irctext.join("")+c;
+
+    return irctext.replace(/(http:\/\/[^ <>"']+)/gi,urlLinkFunc).replace(/(#[^ ;@!><*'"]+)/gi,chanLink);
+}
+window.urlLinkFunc = function(str){
+return "<a href='"+str+"' target='_blank'>"+str+"</a>";
+}
+window.chanLink = function(str){
+if(str in colorcheck) return str;
+return "<a href='irc://"+irc.serverlink+"/"+str+"' onclick='raw(\"join "+str+"\");return false;' title='Click to join "+str+"'>"+str+"</a>";
 }
 window.hue2rgb = function(deg){
     /* input: 0-255 */
@@ -392,6 +579,9 @@ window.altermode = function(mode,delta,userBool){
     }
     return base+" "+args.join(" ");
 }
+window.sortStatus = function(a,b){
+    return irc["chstatus"].lastIndexOf(a)-irc["chstatus"].lastIndexOf(b);
+}
 
 
 
@@ -430,6 +620,7 @@ window.dragtop = 0;
 window.initwinpos = 0;
 window.sandbox = null;
 window.pagefocused = true;
+window.tabletters = "";
 
 window.pageLoaded = function(){
 sandboxCont = document.createElement("div");
@@ -603,15 +794,19 @@ var usercont = document.createElement("div");
 var topicdiv = document.createElement("div");
 var topic = document.createElement("span");
 var chmode = document.createElement("span");
+topicdiv.appendChild(document.createTextNode("["));
 topicdiv.appendChild(chmode);
+topicdiv.appendChild(document.createTextNode("] "));
 topicdiv.appendChild(topic);
 input.style.position = "absolute";
 output.style.position = "absolute";
 usercont.style.position = "absolute";
 topicdiv.style.position = "absolute";
 //input.style.border = ui["sepborder"];
-output.style.border = ui["sepborder"];
-usercont.style.border = ui["sepborder"];
+output.style.borderRight = ui["sepborder"];
+usercont.style.borderLeft = ui["sepborder"];
+output.style.borderTop = ui["sepborder"];
+usercont.style.borderTop = ui["sepborder"];
 //topicdiv.style.border = ui["sepborder"];
 usercont.style.width = "75px";
 topicdiv.style.top = "18px";
@@ -622,6 +817,7 @@ output.style.top = "36px";
 output.style.overflowY = "scroll";
 output.style.overflowX = "auto";
 usercont.style.top = "36px";
+usercont.style.overflow = "scroll";
 userlist.style.padding = "0px";
 userlist.style.margin = "0px";
 input.style.width = "100%";
@@ -719,18 +915,114 @@ if(target.charAt(0)==irc.chantype)
     return newchanwin(tmp);
 return newuserwin(tmp);
 }
+window.userCommand = function(data,target){
+var params = data.split(" ");
+var cmd = params.shift().toUpperCase();
+switch(cmd){
+case "KICK":
+    if(!is_chan(params[0])) params.unshift(target);
+    return sendCommand("KICK "+params.join(" "));
+break;
+case "MSG":
+    return sendCommand("PRIVMSG "+params.join(" "));
+break;
+case "UMODE":
+    return sendCommand("MODE "+irc.nick+" "+params.join(" "));
+break;
+case "MODE":
+    if((!is_chan(params[0]))&&(!isMe(params[0]))) params.unshift(target);
+    return sendCommand("MODE "+params.join(" "));
+break;
+case "HELP":
+    return sendCommand("HELPOP ?"+params.join(" "));
+break;
+case "ACTION":
+case "ME":
+    return sendCommand("PRIVMSG "+target+" ACTION"+params.join(" ")+"");
+break;
+case "T":
+case "TOPIC":
+    if(!is_chan(params[0])) params.unshift(target);
+    return sendCommand("TOPIC "+params.join(" "));
+break;
+case "OP":
+    if(!params.length) params.push(irc.nick);
+    return sendCommand("MODE "+target+" +o "+params.join(" "));
+break;
+case "DEOP":
+    if(!params.length) params.push(irc.nick);
+    return sendCommand("MODE "+target+" -o "+params.join(" "));
+break;
+case "WII":
+    return sendCommand("WHOIS "+params[0]+" "+params[0]);
+break;
+}
+return sendCommand(data);
+}
 window.inputEvent = function(event){
-if((event.keyCode==13)&&(!event.shiftKey)){
-    data = event.currentTarget.value;
-    event.currentTarget.value = "";
-    if(data.charAt(0)=="/") {
-        sendCommand(data.substring(1));
-    } else {
-        addMessage(event.currentTarget.sendto,colorize(irc["nick"])+": <span style='color:#888;'>"+data+"</span>");
-        sendCommand("PRIVMSG "+event.currentTarget.sendto+" :"+data);
+    if((event.keyCode==13)&&(!event.shiftKey)){
+        data = event.currentTarget.value;
+        event.currentTarget.value = "";
+        if(data.charAt(0)=="/") {
+            userCommand(data.substring(1),event.currentTarget.sendto);
+        } else {
+            addMessage(event.currentTarget.sendto,colorize(irc["nick"])+": <span style='color:#888;'>"+irc2html(data)+"</span>");
+            sendCommand("PRIVMSG "+event.currentTarget.sendto+" :"+data);
+        }
+        event.preventDefault();
+        return false;
     }
-    event.preventDefault();
-    return;
+    if(event.ctrlKey){
+        switch(event.keyCode){
+            case 66:
+                event.currentTarget.value += "";
+                event.preventDefault();
+                return false;
+            break;
+            case 75:
+                event.currentTarget.value += "";
+                event.preventDefault();
+                return false;
+            break;
+            case 79:
+                event.currentTarget.value += "";
+                event.preventDefault();
+                return false;
+            break;
+            case 82:
+                event.currentTarget.value += "";
+                event.preventDefault();
+                return false;
+            break;
+            case 85:
+                event.currentTarget.value += "";
+                event.preventDefault();
+                return false;
+            break;
+        }
+    }
+    if((event.keyCode==9)&&(!event.shiftKey)){
+        if(tabletters=="") {
+            event.preventDefault();
+            return false;
+        }
+        var win = currentwin.win;
+        var l = tabletters.length;
+        for(var u in win.chanstuff.users){
+            if(win.chanstuff.users[u][0].substring(0,l).toUpperCase()==tabletters){
+                event.currentTarget.value = event.currentTarget.value.substring(0,event.currentTarget.value.length-l)+win.chanstuff.users[u][0];
+                break;
+            }
+        }
+        event.preventDefault();
+        return false;
+    }
+    if((event.keyCode>47) && (event.keyCode<91)){
+        window.tabletters += String.fromCharCode(event.keyCode);
+    } else if(event.keyCode==8) {
+        window.tabletters = tabletters.substring(0,tabletters.length-1);
+    } else {
+        window.tabletters = "";
     }
 }
 window.sortUser = function(a,b){
@@ -753,6 +1045,7 @@ window.updateUsers = function(win){
         li.style.padding = "0px";
         li.style.margin = "0px";
         li.style.listStyle = "none";
+        li.style.whiteSpace = "nowrap";
         li.innerHTML += " "+colorize(win.chanstuff.users[u][0]);
         win.chanstuff.userlist.appendChild(li);
     }
@@ -772,7 +1065,7 @@ raw("PART "+win.chanstuff.input.sendto);
 
 
 window.socket = {"test":'f',"var":{}};
-window.irc = {"nick":"unknown","chmodegrps":["beI","kfL","lj","psmntirRcOAQKVCuzNSMTG","qaohv"],"chstatus":["~&@%+"],"chstatusreg":/([~&@%+]*)(.+)/,"server":"SERVER","chantype":"#"}
+window.irc = {"nick":"unknown","chmodegrps":["beI","kfL","lj","psmntirRcOAQKVCuzNSMTG"],"prefix":"qaohv","chstatus":["~&@%+"],"chstatusreg":/([~&@%+]*)(.+)/,"server":"SERVER","serverlink":"irc.somewhere.net","chantype":"#"}
 function getSwf() {
 if (navigator.appName.indexOf ("Microsoft") !=-1) {
 return window["xmlsocket"];
