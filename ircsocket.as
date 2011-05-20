@@ -90,10 +90,10 @@ ExternalInterface.call("response",error.message);
 						buffer += socket.readUTFBytes(maxBytes);
 					}
 				}
-				var lines:Array = buffer.split("\r\n");
-				buffer = lines.pop();
-				for each(var line:String in lines){
-				ExternalInterface.call("irc_onData", line);
+var lines:Array = buffer.split("\r\n");
+buffer = lines.pop();
+for each(var line:String in lines){
+ExternalInterface.call("irc_onData", line.replace(/\\/g,"\\\\"));
 				}
 				socket.flush();
 			}

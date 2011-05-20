@@ -256,6 +256,9 @@ function ircdata(data){
         case "404":
             addMessage(currentwin.win.chanstuff["input"].sendto,message);
         break;
+        case "211":/*create whois window*/
+            
+        break;
         case "321":// init /list
             irc.channellist = [];
         break;
@@ -830,6 +833,8 @@ win.chanstuff = {
 "userlist":userlist,
 "output":output,
 "input":input,
+"scroll":[],
+"currentScroll":0,
 "topic":topic,
 "mode":chmode,
 "users":[]
@@ -887,6 +892,8 @@ input.sendto = username;
 win.chanstuff = {
 "output":output,
 "input":input,
+"scroll":[],
+"currentScroll":0,
 "userhost":userhost
 }
 win.appendChild(input);
@@ -919,9 +926,13 @@ window.userCommand = function(data,target){
 var params = data.split(" ");
 var cmd = params.shift().toUpperCase();
 switch(cmd){
+case "K":
 case "KICK":
     if(!is_chan(params[0])) params.unshift(target);
     return sendCommand("KICK "+params.join(" "));
+break;
+case "J":
+    return sendCommand("JOIN "+params.join(" "));
 break;
 case "MSG":
     return sendCommand("PRIVMSG "+params.join(" "));
@@ -956,46 +967,89 @@ break;
 case "WII":
     return sendCommand("WHOIS "+params[0]+" "+params[0]);
 break;
+case "STYLE":
+case "PRE":
+    irc.prepend = params.join(" ");
+    addMessage(currentwin.win.chanstuff.input.sendto,irc2html(irc.prepend+"New style has been set"));
+    return;
+break;
+case "CLEAR":
+    return clearlines(currentwin.win);
+break;
 }
 return sendCommand(data);
 }
 window.inputEvent = function(event){
     if((event.keyCode==13)&&(!event.shiftKey)){
-        data = event.currentTarget.value;
+        var data = event.currentTarget.value;
         event.currentTarget.value = "";
         if(data.charAt(0)=="/") {
             userCommand(data.substring(1),event.currentTarget.sendto);
         } else {
-            addMessage(event.currentTarget.sendto,colorize(irc["nick"])+": <span style='color:#888;'>"+irc2html(data)+"</span>");
-            sendCommand("PRIVMSG "+event.currentTarget.sendto+" :"+data);
+            var lines = data.split("\n");
+            while(data = lines.shift()){
+                addMessage(event.currentTarget.sendto,colorize(irc["nick"])+": <span style='color:#888;'>"+irc2html(irc.prepend+data)+"</span>");
+                sendCommand("PRIVMSG "+event.currentTarget.sendto+" :"+irc.prepend+data);
+            }
         }
+        var target = gettarget(event.currentTarget.sendto);
+        target.chanstuff.currentScroll = target.chanstuff.scroll.push(data);
         event.preventDefault();
         return false;
     }
-    if(event.ctrlKey){
+    if(event.keyCode==38){
+        var target = gettarget(event.currentTarget.sendto);
+        /*target.chanstuff.currentScroll--;
+        if(target.chanstuff.currentScroll<0) target.chanstuff.currentScroll = 0;
+        if((target.chanstuff.currentScroll==target.chanstuff.scroll.length-2) &&(event.currentTarget.value)) target.chanstuff.scroll.push(event.currentTarget.value);
+        event.currentTarget.value = target.chanstuff.scroll[target.chanstuff.currentScroll];*/
+        if (target.chanstuff.currentScroll >= 0){
+            if(event.currentTarget.value)
+                target.chanstuff.scroll[target.chanstuff.currentScroll--] = event.currentTarget.value;
+            else
+                target.chanstuff.currentScroll--;
+        }
+        if (target.chanstuff.currentScroll >= 0) event.currentTarget.value = target.chanstuff.scroll[target.chanstuff.currentScroll];
+        else {event.currentTarget.value = "";target.chanstuff.currentScroll++;}
+        event.preventDefault();
+        return false;
+    }
+    if(event.keyCode==40){
+        var target = gettarget(event.currentTarget.sendto);
+        /*target.chanstuff.currentScroll++;
+        if(target.chanstuff.currentScroll>=target.chanstuff.scroll.length) target.chanstuff.currentScroll = target.chanstuff.scroll.length-1;
+        event.currentTarget.value = target.chanstuff.scroll[target.chanstuff.currentScroll];*/
+        event.currentTarget.value = target.chanstuff.scroll[target.chanstuff.currentScroll++];
+        if(event.currentTarget.value=="undefined"){event.currentTarget.value = ""; target.chanstuff.currentScroll--;}
+        event.preventDefault();
+        return false;
+    }
+    if(event.ctrlKey){//only works in chrome because everything in firefox is already bound
+        //console.log(event.keyCode);
+        /* Windows users may be able to hit ALT+2 for bold? */
         switch(event.keyCode){
             case 66:
-                event.currentTarget.value += "";
+                event.currentTarget.value += String.fromCharCode(2);
                 event.preventDefault();
                 return false;
             break;
             case 75:
-                event.currentTarget.value += "";
+                event.currentTarget.value += String.fromCharCode(3);
                 event.preventDefault();
                 return false;
             break;
             case 79:
-                event.currentTarget.value += "";
+                event.currentTarget.value += String.fromCharCode(0xf);
                 event.preventDefault();
                 return false;
             break;
             case 82:
-                event.currentTarget.value += "";
+                event.currentTarget.value += String.fromCharCode(0x16);
                 event.preventDefault();
                 return false;
             break;
             case 85:
-                event.currentTarget.value += "";
+                event.currentTarget.value += String.fromCharCode(0x1f);
                 event.preventDefault();
                 return false;
             break;
@@ -1046,6 +1100,7 @@ window.updateUsers = function(win){
         li.style.margin = "0px";
         li.style.listStyle = "none";
         li.style.whiteSpace = "nowrap";
+        li.style.fontSize = "12px";
         li.innerHTML += " "+colorize(win.chanstuff.users[u][0]);
         win.chanstuff.userlist.appendChild(li);
     }
@@ -1065,7 +1120,7 @@ raw("PART "+win.chanstuff.input.sendto);
 
 
 window.socket = {"test":'f',"var":{}};
-window.irc = {"nick":"unknown","chmodegrps":["beI","kfL","lj","psmntirRcOAQKVCuzNSMTG"],"prefix":"qaohv","chstatus":["~&@%+"],"chstatusreg":/([~&@%+]*)(.+)/,"server":"SERVER","serverlink":"irc.somewhere.net","chantype":"#"}
+window.irc = {"nick":"unknown","chmodegrps":["beI","kfL","lj","psmntirRcOAQKVCuzNSMTG"],"prefix":"qaohv","chstatus":["~&@%+"],"chstatusreg":/([~&@%+]*)(.+)/,"server":"SERVER","serverlink":"irc.somewhere.net","chantype":"#","prepend":""}
 function getSwf() {
 if (navigator.appName.indexOf ("Microsoft") !=-1) {
 return window["xmlsocket"];
