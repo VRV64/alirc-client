@@ -207,6 +207,9 @@ function ircdata(data){
 		case "255":
 		case "265":
 		case "266":
+        case "290"://helpop
+        case "291":
+        case "292":
 		case "372"://motd
 		case "375":
 			addMessage(irc.server,message);
@@ -257,8 +260,57 @@ function ircdata(data){
         case "404":
             addMessage(currentwin.win.chanstuff["input"].sendto,message);
         break;
-        case "211":/*create whois window*/
-            
+        case "307":/* Whois lines */
+        case "310":
+        case "313":
+        case "335":
+        case "378":
+        case "671":
+            var target = gettarget("Whois");
+            addMessage("Whois",params[3]+" "+message,1,1);
+        break;
+        case "301":/*whois away */
+            addMessage("Whois","<b>Away:</br> "+irc2html(message),1,1);
+        break;
+        case "311":/*create whois window*/
+            var target = gettarget("Whois");
+            target.chanstuff["input"].style.height="1px";
+            target.chanstuff["input"].disabled=true;
+            adjustuserui(target);
+            var p = document.createElement("h3");
+            p.innerHTML = params[3];
+            p.style.margin = "0px";
+            p.style.fontSize = "12px";
+            p.style.textAlign = "center";
+            var output = target.chanstuff["output"];
+            var willScroll = (output.clientHeight+output.scrollTop >= output.scrollHeight);
+            output.appendChild(p);
+            if(willScroll) output.scrollTop = output.scrollHeight-output.clientHeight;
+            addMessage("Whois","<b>Userhost:</b> "+params[4]+"@"+params[5],1,1);
+            addMessage("Whois","<b>Real Name:</b> "+irc2html(message),1,1);
+        break;
+        case "312":
+            addMessage("Whois","<b>Server:</b> "+params[5]+" ("+irc2html(message)+")",1,1);
+        break;
+        case "317":
+            var j = parseInt( params[4] / 86400 );
+            var h = parseInt( params[4] / 3600 ) % 24;
+            var m = parseInt( params[4] / 60 ) % 60;
+            var s = parseInt( params[4] % 60 );
+            var res = [];
+            if(j) res.push(j+" days");
+            if(h) res.push(h+" hours");
+            if(m) res.push(m+" minutes");
+            if(s&&!j&&!h) res.push(s+" secs");
+            var d = new Date(parseInt(params[5])*1000);
+            addMessage("Whois","<b>Signed on:</b> "+d.toLocaleString(),1,1);
+            addMessage("Whois","<b>Idle:</b> "+res.join(", "));
+        break;
+        case "318":
+            addMessage("Whois","<hr>",1,1);
+        break;
+        case "319":
+            addMessage("Whois","<b>Currently in:</br> "+irc2html(message),1,1);
         break;
         case "321":// init /list
             irc.channellist = [];
@@ -469,7 +521,7 @@ function irc2html(irctext){
     if(font.on) c += "</span>";
     irctext = irctext.join("")+c;
 
-    return irctext.replace(/(http:\/\/[^ <>"']+)/gi,urlLinkFunc).replace(/(#[^ ;@!><*'"]+)/gi,chanLink);
+    return irctext.replace(/(http:\/\/[^ <>"']+)/gi,urlLinkFunc).replace(/(#[^ ;@!><"]+)/gi,chanLink);
 }
 window.urlLinkFunc = function(str){
 return "<a href='"+str+"' target='_blank' style='color:#888'>"+str+"</a>";
@@ -557,7 +609,7 @@ window.sortChanListName = function(){
     clearlines(target);
     irc.channellist.sort(chanNameCmp);
     for(var c in irc.channellist){
-        addMessage("Channels List",irc.channellist[c]["name"]+" ("+irc.channellist[c]["users"]+") "+irc.channellist[c]["topic"],true,true);
+        addMessage("Channels List",irc.channellist[c]["name"]+" ("+irc.channellist[c]["users"]+") "+irc2html(irc.channellist[c]["topic"]),true,true);
     }
 }
 window.sortChanListUser = function(){
@@ -565,7 +617,7 @@ window.sortChanListUser = function(){
     clearlines(target);
     irc.channellist.sort(chanUsersCmp);
     for(var c in irc.channellist){
-        addMessage("Channels List",irc.channellist[c]["name"]+" ("+irc.channellist[c]["users"]+") "+irc.channellist[c]["topic"],true,true);
+        addMessage("Channels List",irc.channellist[c]["name"]+" ("+irc.channellist[c]["users"]+") "+irc2html(irc.channellist[c]["topic"]),true,true);
     }
 }
 window.altermode = function(mode,delta,userBool){
@@ -869,7 +921,7 @@ win.onclose = partChan;
 
 winsize(win,480,360);
 targetmap[channel] = win;
-
+input.focus()
 return win;
 }
 
@@ -947,6 +999,9 @@ window.userCommand = function(data,target){
 var params = data.split(" ");
 var cmd = params.shift().toUpperCase();
 switch(cmd){
+case "CTCP":
+    return sendCommand("PRIVMSG "+target+" "+params.join(" ")+"");
+break;
 case "K":
 case "KICK":
     if(!is_chan(params[0])) params.unshift(target);
@@ -966,7 +1021,7 @@ case "MODE":
     return sendCommand("MODE "+params.join(" "));
 break;
 case "HELP":
-    return sendCommand("HELPOP ?"+params.join(" "));
+    return sendCommand("HELP ?"+params.join(" "));
 break;
 case "ACTION":
 case "ME":
