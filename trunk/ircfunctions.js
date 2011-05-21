@@ -214,6 +214,7 @@ function ircdata(data){
 		/* Show nothing at all */
 		case "001":
             irc.serverlink = userhost[0];
+            socket.onStarted();
         break;
 		case "002":
 		case "003":/* 001-004 can't be used because irc.server doesn't exist yet :( */
@@ -318,6 +319,10 @@ function ircdata(data){
                     chan.chanstuff.users.push([n[2],n[1]]);
             }
             updateUsers(chan);//chanstuff.users.sort(userSort);
+        break;
+        case "433":
+            irc.nick += "_";
+            raw("NICK "+irc["nick"]);
         break;
 		default:
 			addMessage(userhost[0],params.slice(1).join(" ").concat(": ",message));
@@ -467,11 +472,11 @@ function irc2html(irctext){
     return irctext.replace(/(http:\/\/[^ <>"']+)/gi,urlLinkFunc).replace(/(#[^ ;@!><*'"]+)/gi,chanLink);
 }
 window.urlLinkFunc = function(str){
-return "<a href='"+str+"' target='_blank'>"+str+"</a>";
+return "<a href='"+str+"' target='_blank' style='color:#888'>"+str+"</a>";
 }
 window.chanLink = function(str){
 if(str in colorcheck) return str;
-return "<a href='irc://"+irc.serverlink+"/"+str+"' onclick='raw(\"join "+str+"\");return false;' title='Click to join "+str+"'>"+str+"</a>";
+return "<a href='irc://"+irc.serverlink+"/"+str+"' onclick='raw(\"join "+str+"\");return false;' title='Click to join "+str+"' style='color:#888'>"+str+"</a>";
 }
 window.hue2rgb = function(deg){
     /* input: 0-255 */
@@ -593,6 +598,7 @@ window.sortStatus = function(a,b){
 
 
 window.ui = {
+"color":"#000000",
 "titlebg":"blue",
 "titlecolor":"white",
 "titleheight":"20px",
@@ -673,6 +679,7 @@ win.style.height= "100%";
 win.style.width = "100%";
 win.style.position = "relative";
 win.style.background = ui["background"];
+win.style.color = ui["color"];
 wincont.appendChild(win);
 var title = document.createElement("div");
 title.style.backgroundColor = ui["titlebg"];
@@ -689,6 +696,7 @@ titlespan.innerHTML = titletext;
 title.titlespan = titlespan;
 title.appendChild(titlespan);
 bind(title,"mousedown",startdrag);
+bind(title,"dblclick",shadewin);
 bind(wincont,"mousedown",wintotop);
 var closebutton = document.createElement("div");
 closebutton.innerHTML = "X";
@@ -729,6 +737,19 @@ win.cont.style.width = width+"px";
 adjustui(win);
 }
 
+window.shadewin = function(event){
+    var tmp = event.target.parentNode;
+    if(tmp.cont) currentwin = tmp.cont;
+    else currentwin = tmp.parentNode.cont;
+    document.body.focus();
+    if(currentwin.style.visibility!="hidden"){
+        currentwin.style.visibility="hidden";
+        currentwin.win.titlediv.style.visibility="visible";
+    } else {
+        currentwin.style.visibility="visible";
+    }
+    return false;
+}
 window.startdrag = function(event){
 var tmp = event.target.parentNode;
 if(tmp.cont) currentwin = tmp.cont;
@@ -1176,7 +1197,7 @@ function irc_onClose(){
         socket.onClose();
 }
 socket.connect = function(){
-socket.irc.connect("sigma.pokestation.net",6667,"xmlsocket://sigma.pokestation.net:8002");
+socket.irc.connect("irc.bitsjointirc.net",6667,"xmlsocket://irc.bitsjointirc.net:8002");
 }
 socket.onReady = function(){
 //socket.irc.connect("irc.pokesplash.net",6667,"xmlsocket://irc.pokesplash.net:8002");
@@ -1187,6 +1208,9 @@ socket.onData = function(data){
 ircdata(data);//addMessage("*Server*",data);
 };
 socket.onError = function(error){document.getElementById("msg").innerHTML += "Error: "+error+"<br>";};
+socket.onStarted = function(){
+return false;
+}
 socket.close = function(){raw("QUIT");};
 
 
@@ -1195,6 +1219,16 @@ pageLoaded();
 window.setTimeout(init,1000);
 }
 window.onunload = socket.close;
+window.onbeforeunload = function(event){
+	if(!event) event = window.event;
+	event.cancelBubble = true;
+	event.returnValue = 'If you leave this page, your chat session will end. Are you sure you want to leave this page?';
+	if (event.stopPropagation) {
+		event.stopPropagation();
+		event.preventDefault();
+	}
+};
+
 window.onblur = function(event){
 window.pagefocused = false;
 }
