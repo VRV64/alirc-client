@@ -12,7 +12,9 @@ raw(data);
 }
 function ircdata(data){
 	if(data.substr(0,4)=="PING"){
-		return raw("PO".concat(data.substring(2)));
+		raw("PO".concat(data.substring(2)));
+        raw("PING "+(new Date()).valueOf())
+        return;
 	}
 	var chunks = data.split(":");
 	var params = chunks[1].split(" ");
@@ -174,11 +176,66 @@ function ircdata(data){
         break;
         case "PRIVMSG":
             if(isMe(params[2])){
-                addMessage(userhost[0],colorize(userhost[0])+": "+message);
-                gettarget(userhost[0]).chanstuff["userhost"].innerHTML = params[0];
+                if(message.charAt(0)==""){
+                    var ctcp = message.toUpperCase();
+                    if(ctcp.substring(1,7)=="ACTION"){
+                        addMessage(userhost[0],"* <i>"+colorize(userhost[0])+" "+irc2html(message.substring(7,message.length-1))+"</i>");
+                    } else {
+                        addMessage(currentwin.win.chanstuff["input"].sendto,"Received CTCP '"+irc2html(message.substring(1,message.length-1))+"' from "+colorize(userhost[0]));
+                    }
+                    switch(ctcp){
+                    case "FINGER":
+                        raw("PRIVMSG "+userhost[0]+" FINGER Your average IRC user on http://pokesplash.net");
+                    break;
+                    case "TIME":
+                        raw("PRIVMSG "+userhost[0]+" TIME "+(new Date()).toLocaleString()+"");
+                    break;
+                    case "VERSION":
+                        raw("PRIVMSG "+userhost[0]+" VERSION ALIRC Client v.01");
+                    break;
+                    case "SOURCE":
+                        raw("PRIVMSG "+userhost[0]+" SOURCE URL: http://pokesplash.net/irc/alirc.php");
+                    break;
+                    case "CLIENTINFO":
+                        raw("PRIVMSG "+userhost[0]+" CLIENTINFO Available commands: FINGER, TIME, VERSION, SOURCE, CLIENTINFO");
+                    break;
+                    case "CLIENTINFO FINGER":
+                        raw("PRIVMSG "+userhost[0]+" CLIENTINFO FINGER - A bit of information about me");
+                    break;
+                    case "CLIENTINFO TIME":
+                        raw("PRIVMSG "+userhost[0]+" CLIENTINFO TIME - My current time");
+                    break;
+                    case "CLIENTINFO VERSION":
+                        raw("PRIVMSG "+userhost[0]+" CLIENTINFO VERSION - My IRC client information");
+                    break;
+                    case "CLIENTINFO SOURCE":
+                        raw("PRIVMSG "+userhost[0]+" CLIENTINFO SOURCE - Where to get this IRC client");
+                    break;
+                    case "CLIENTINFO CLIENTINFO":
+                        raw("PRIVMSG "+userhost[0]+" CLIENTINFO CLIENTINFO - CTCP Commands you can use on me. I see all CTCP attempts.");
+                    break;
+                    }
+                } else {
+                    addMessage(userhost[0],colorize(userhost[0])+": "+message);
+                    gettarget(userhost[0]).chanstuff["userhost"].innerHTML = params[0];
+                }
             }else{
-                addMessage(params[2],colorize(userhost[0])+": "+irc2html(message));
+                if(message.charAt(0)==""){
+                    var ctcp = message.toUpperCase();
+                    if(ctcp.substring(1,7)=="ACTION"){
+                        addMessage(params[2],"* <i>"+colorize(userhost[0])+" "+irc2html(message.substring(7,message.length-1))+"</i>");
+                    } else {
+                        addMessage(params[2],"Received CTCP '"+irc2html(message.substring(1,message.length-1))+"' from "+colorize(userhost[0]));
+                    }
+                } else {
+                    addMessage(params[2],colorize(userhost[0])+": "+irc2html(message));
+                }
             }
+        break;
+        case "PONG":
+            var n = (new Date()).valueOf();
+            var l = (n-parseInt(message))/2;
+            gettarget(irc.server).chanstuff.userhost.innerHTML = "LAG: "+Math.floor(l)+" ms";
         break;
         case "QUIT":
             var target = null;
@@ -310,7 +367,7 @@ function ircdata(data){
             addMessage("Whois","<hr>",1,1);
         break;
         case "319":
-            addMessage("Whois","<b>Currently in:</br> "+irc2html(message),1,1);
+            addMessage("Whois","<b>Currently in:</b> "+irc2html(message),1,1);
         break;
         case "321":// init /list
             irc.channellist = [];
@@ -399,7 +456,7 @@ function addMessage(nam,html,hideTime,noCount){
     output.appendChild(p);
     if(willScroll) output.scrollTop = output.scrollHeight-output.clientHeight;
     if(!!noCount) return;
-    if(currentwin!=target.cont){
+    if((currentwin!=target.cont)||(currentwin.style.visibility=="hidden")){
         if(!target.msgs.innerHTML) target.msgs.innerHTML = "(1)";
         else target.msgs.innerHTML = "("+(parseInt(target.msgs.innerHTML.substring(1))+1)+")";
     }
@@ -521,7 +578,12 @@ function irc2html(irctext){
     if(font.on) c += "</span>";
     irctext = irctext.join("")+c;
 
-    return irctext.replace(/(http:\/\/[^ <>"']+)/gi,urlLinkFunc).replace(/(#[^ ;@!><"]+)/gi,chanLink);
+    irctext = irctext.replace(/(http:\/\/[^ <>"']+)/gi,urlLinkFunc).replace(/(#[^ ;@!><"]+)/gi,chanLink);
+    
+    for(var smil in smilies){
+        irctext = irctext.replace(smilies[smil][0],smilies[smil][1]);
+    }
+    return irctext;
 }
 window.urlLinkFunc = function(str){
 return "<a href='"+str+"' target='_blank' style='color:#888'>"+str+"</a>";
@@ -658,7 +720,19 @@ window.ui = {
 "buttonborder":"1px white solid",
 "background":"#fff none",
 "sepborder":"1px black solid",
-}
+};
+window.smilies = [
+[/o:-?\)/gi,"<img src='/resources/emotes/face-angel.png'>"],
+[/:'\(/g,"<img src='/resources/emotes/face-crying.png'>"],
+[/>:[\)D]/g,"<img src='/resources/emotes/face-devilish.png'>"],
+[/:-?D/gi,"<img src='/resources/emotes/face-grin.png'>"],
+[/:-?\*/gi,"<img src='/resources/emotes/face-kiss.png'>"],
+[/:-?\|/gi,"<img src='/resources/emotes/face-plain.png'>"],
+[/:-?\(/g,"<img src='/resources/emotes/face-sad.png'>"],
+[/:-?\)/g,"<img src='/resources/emotes/face-smile.png'>"],
+[/:-?o/gi,"<img src='/resources/emotes/face-surprise.png'>"],
+[/;-?\)/g,"<img src='/resources/emotes/face-wink.png'>"]
+];
 
 /*
 http://dromaeo.com/?id=140026
@@ -759,9 +833,19 @@ closebutton.style.border = ui["buttonborder"];
 closebutton.style.cursor = "default";
 bind(closebutton,"click",deletewin);
 title.appendChild(closebutton);
+var shadebutton = document.createElement("div");
+shadebutton.innerHTML = "=";
+shadebutton.style.left="0px";
+shadebutton.style.top="0px";
+shadebutton.style.position="absolute";
+shadebutton.style.border = ui["buttonborder"];
+shadebutton.style.cursor = "default";
+bind(shadebutton,"click",shadewin);
+title.appendChild(shadebutton);
 win.appendChild(title);
 win.id = "vwin"+winid;
 win.closebutton = closebutton;
+win.shadebutton = shadebutton;
 win.titlediv = title;
 win.msgs = titlemsg;
 wincont.win = win;//reversable binding
@@ -779,7 +863,9 @@ return win;
 
 window.adjustui = function(win){
 win.titlediv.style.width = win.style.width;
-win.closebutton.style.left = parseInt(win.cont.style.width)-15+"px";
+var w = parseInt(win.cont.style.width);
+win.closebutton.style.left = w-15+"px";
+win.shadebutton.style.left = w-30+"px";
 win.onuiupdate(win);
 }
 
@@ -892,6 +978,7 @@ topicdiv.style.fontSize = "12px";
 output.style.top = "36px";
 output.style.overflowY = "scroll";
 output.style.overflowX = "auto";
+output.style.paddingBottom = "3px";
 usercont.style.top = "36px";
 usercont.style.overflow = "scroll";
 userlist.style.padding = "0px";
@@ -957,6 +1044,7 @@ output.style.top = "36px";
 output.style.width = "100%";
 output.style.overflowY = "scroll";
 output.style.overflowX = "auto";
+output.style.paddingBottom = "3px";
 input.style.width = "100%";
 input.style.height = "36px";
 bind(input,"keydown",inputEvent);
@@ -1010,6 +1098,8 @@ break;
 case "J":
     return sendCommand("JOIN "+params.join(" "));
 break;
+case "QUERY":
+    addMessage(params[0],colorize(irc.nick)+": "+params.slice(1).join(" "));
 case "MSG":
     return sendCommand("PRIVMSG "+params.join(" "));
 break;
@@ -1025,7 +1115,10 @@ case "HELP":
 break;
 case "ACTION":
 case "ME":
-    return sendCommand("PRIVMSG "+target+" ACTION"+params.join(" ")+"");
+    var m = params.join(" ");
+    sendCommand("PRIVMSG "+target+" ACTION "+m+"");
+    addMessage(currentwin.win.chanstuff.input.sendto,"* <i>"+colorize(irc.nick)+" "+irc2html(m)+"</i>");
+    return;
 break;
 case "T":
 case "TOPIC":
