@@ -4,7 +4,7 @@ function raw(data){
 }
 function ircstartup(){
 irc["nick"] = document.getElementById("nick").value;
-raw("USER "+irc["nick"]+" 8 0 :"+irc["nick"]);
+raw("USER al-"+irc["nick"]+" 8 0 :"+irc["nick"]);
 raw("NICK "+irc["nick"]);
 }
 function sendCommand(data){
@@ -234,8 +234,8 @@ function ircdata(data){
         break;
         case "PONG":
             var n = (new Date()).valueOf();
-            var l = (n-parseInt(message))/2;
-            gettarget(irc.server).chanstuff.userhost.innerHTML = "LAG: "+Math.floor(l)+" ms";
+            var l = (n-parseInt(message))/20;
+            gettarget(irc.server).chanstuff.userhost.innerHTML = "LAG: "+Math.floor(l)+" cs";
         break;
         case "QUIT":
             var target = null;
@@ -243,18 +243,18 @@ function ircdata(data){
             for(var t in targetmap){
                 target = targetmap[t];
                 if(target.chanstuff.input.sendto.toLowerCase()==u)
-                    addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") has quit ("+message+")");
+                    addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") has quit ("+irc2html(message)+")");
                 if(!is_chan(target.chanstuff.input.sendto)) continue;
                 if(removeUser(target,userhost[0])){
                     updateUsers(target);
-                    addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") has quit ("+message+")",false,true);
+                    addMessage(target.chanstuff.input.sendto,colorize(userhost[0])+" ("+ params[0] +") has quit ("+irc2html(message)+")",false,true);
                 }
             }
         break;
         case "TOPIC":
-            addMessage(params[2],colorize(userhost[0])+" has changed the topic to: "+message);
+            addMessage(params[2],colorize(userhost[0])+" has changed the topic to: "+irc2html(message));
             var chan = gettarget(params[2]);
-            chan.chanstuff.topic.innerHTML = message;
+            chan.chanstuff.topic.innerHTML = irc2html(message);
             var d = new Date();
             chan.chanstuff.topic.parentNode.setAttribute("title","Topic set by "+userhost[0]+" on "+d.toLocaleString());
             
@@ -274,6 +274,7 @@ function ircdata(data){
 		/* Show nothing at all */
 		case "001":
             irc.serverlink = userhost[0];
+            irc.stable = true;
             socket.onStarted();
         break;
 		case "002":
@@ -313,6 +314,10 @@ function ircdata(data){
 		case "254":
 			addMessage(irc.server,params[2].concat(" ",message));
 		break;
+        /* current window: message (param[3]) */
+        case "401":
+            addMessage(currentwin.win.chanstuff["input"].sendto,message+" ("+colorize(param[3])+")");
+        break;
         /* Show to current window */
         case "404":
             addMessage(currentwin.win.chanstuff["input"].sendto,message);
@@ -409,7 +414,7 @@ function ircdata(data){
         break;
         case "332"://topic
             var chan = gettarget(params[3]);
-            chan.chanstuff.topic.innerHTML = message;
+            chan.chanstuff.topic.innerHTML = irc2html(message);
             addMessage(params[3],"The topic in "+params[3]+" is currently: "+irc2html(message));
         break;
         case "333"://topic setter
@@ -430,8 +435,12 @@ function ircdata(data){
             updateUsers(chan);//chanstuff.users.sort(userSort);
         break;
         case "433":
-            irc.nick += "_";
-            raw("NICK "+irc["nick"]);
+            if(!irc.stable){
+                irc.nick += "_";
+                raw("NICK "+irc["nick"]);
+            } else {
+                addMessage(currentwin.win.chanstuff["input"].sendto,message);
+            }
         break;
 		default:
 			addMessage(userhost[0],params.slice(1).join(" ").concat(": ",message));
@@ -578,7 +587,7 @@ function irc2html(irctext){
     if(font.on) c += "</span>";
     irctext = irctext.join("")+c;
 
-    irctext = irctext.replace(/(http:\/\/[^ <>"']+)/gi,urlLinkFunc).replace(/(#[^ ;@!><"]+)/gi,chanLink);
+    irctext = irctext.replace(/(#[^ ;@!><"]+)/gi,chanLink).replace(/(http:\/\/[^ <>"']+)/gi,urlLinkFunc);
     
     for(var smil in smilies){
         irctext = irctext.replace(smilies[smil][0],smilies[smil][1]);
@@ -586,11 +595,11 @@ function irc2html(irctext){
     return irctext;
 }
 window.urlLinkFunc = function(str){
-return "<a href='"+str+"' target='_blank' style='color:#888'>"+str+"</a>";
+return "<a href='"+str+"' target='_blank'>"+str+"</a>";
 }
 window.chanLink = function(str){
 if(str in colorcheck) return str;
-return "<a href='irc://"+irc.serverlink+"/"+str+"' onclick='raw(\"join "+str+"\");return false;' title='Click to join "+str+"' style='color:#888'>"+str+"</a>";
+return "<a href='irc://"+irc.serverlink+"/"+str+"' onclick='raw(\"join "+str+"\");return false;' title='Click to join "+str+"'>"+str+"</a>";
 }
 window.hue2rgb = function(deg){
     /* input: 0-255 */
@@ -713,13 +722,15 @@ window.sortStatus = function(a,b){
 
 window.ui = {
 "color":"#000000",
-"titlebg":"blue",
+"titlebg":"#004411",
 "titlecolor":"white",
 "titleheight":"20px",
 "winborder":"1px black solid",
+"winpad":3,
 "buttonborder":"1px white solid",
-"background":"#fff none",
+"background":"#659b57 none",
 "sepborder":"1px black solid",
+"inputbackground":"#8fda7b"
 };
 window.smilies = [
 [/o:-?\)/gi,"<img src='/resources/emotes/face-angel.png'>"],
@@ -756,6 +767,7 @@ window.initwinpos = 0;
 window.sandbox = null;
 window.pagefocused = true;
 window.tabletters = "";
+window.currenttopic = null;
 
 window.pageLoaded = function(){
 sandboxCont = document.createElement("div");
@@ -792,20 +804,20 @@ window.winobj = function(titletext){
 var wincont = document.createElement("div");
 wincont.style.width = "200px";
 wincont.style.height= "300px";
-wincont.style.border = ui["winborder"];
 wincont.style.position = "absolute";
 wincont.style.left = initwinpos+"px";
 wincont.style.top = initwinpos%256+"px";
 initwinpos += 18;
 wincont.style.zIndex = currentz++;
 var win = document.createElement("div");
-win.style.padding = "0px";
+win.style.padding = ui["winpad"]+"px";
 win.style.margin = "0px";
 win.style.height= "100%";
 win.style.width = "100%";
 win.style.position = "relative";
 win.style.background = ui["background"];
 win.style.color = ui["color"];
+win.style.border = ui["winborder"];
 wincont.appendChild(win);
 var title = document.createElement("div");
 title.style.backgroundColor = ui["titlebg"];
@@ -965,27 +977,32 @@ output.style.position = "absolute";
 usercont.style.position = "absolute";
 topicdiv.style.position = "absolute";
 //input.style.border = ui["sepborder"];
-output.style.borderRight = ui["sepborder"];
-usercont.style.borderLeft = ui["sepborder"];
-output.style.borderTop = ui["sepborder"];
-usercont.style.borderTop = ui["sepborder"];
+output.style.border = ui["sepborder"];
+usercont.style.border = ui["sepborder"];
 //topicdiv.style.border = ui["sepborder"];
 usercont.style.width = "75px";
-topicdiv.style.top = "18px";
+topicdiv.style.top = (18+ui["winpad"])+"px";
 topicdiv.style.height = "18px";
+topicdiv.style.width = "100%";
 topicdiv.style.overflow = "hidden";
 topicdiv.style.fontSize = "12px";
-output.style.top = "36px";
+topicdiv.style.background = ui["background"];
+topicdiv.style.border = ui["winborder"];
+topicdiv.style.cursor = "pointer";
+output.style.top = (36+ui["winpad"]*2)+"px";
 output.style.overflowY = "scroll";
 output.style.overflowX = "auto";
-output.style.paddingBottom = "3px";
-usercont.style.top = "36px";
+usercont.style.top = (36+ui["winpad"]*2)+"px";
 usercont.style.overflow = "scroll";
 userlist.style.padding = "0px";
 userlist.style.margin = "0px";
 input.style.width = "100%";
 input.style.height = "36px";
+input.style.padding = "0px";
+input.style.backgroundColor = ui["inputbackground"];
 bind(input,"keydown",inputEvent);
+bind(topic,"mouseover",focusTopic);
+bind(topic,"mouseout",unfocusTopic);
 usercont.appendChild(userlist);
 
 input.sendto = channel;
@@ -1008,18 +1025,20 @@ win.onclose = partChan;
 
 winsize(win,480,360);
 targetmap[channel] = win;
-input.focus()
+input.focus();
 return win;
 }
 
 window.adjustchanui = function(win){
 var listwidth = parseInt(win.chanstuff["userlist"].parentNode.style.width);
-var winwidth = parseInt(win.cont.style.width);
-win.chanstuff["output"].style.width = winwidth-listwidth+"px";
-win.chanstuff["userlist"].parentNode.style.left = win.chanstuff["output"].style.width;
+var winwidth = parseInt(win.cont.style.width);//-ui["winpad"]*2;
+win.chanstuff["output"].style.width = winwidth-listwidth-ui["winpad"]+"px";
+win.chanstuff["userlist"].parentNode.style.left = winwidth-listwidth+ui["winpad"]+"px";
+win.chanstuff["topic"].parentNode.style.width = winwidth+"px";
+win.chanstuff["input"].style.width = winwidth+"px";
 var inhigh = parseInt(win.chanstuff["input"].style.height);
 var winhigh = parseInt(win.cont.style.height);
-win.chanstuff["output"].style.height = winhigh-inhigh-36+"px";
+win.chanstuff["output"].style.height = winhigh-inhigh-36-ui["winpad"]*3+"px";
 win.chanstuff["input"].style.top = winhigh-inhigh+"px";
 win.chanstuff["userlist"].parentNode.style.height = win.chanstuff["output"].style.height;
 }
@@ -1044,7 +1063,6 @@ output.style.top = "36px";
 output.style.width = "100%";
 output.style.overflowY = "scroll";
 output.style.overflowX = "auto";
-output.style.paddingBottom = "3px";
 input.style.width = "100%";
 input.style.height = "36px";
 bind(input,"keydown",inputEvent);
@@ -1074,6 +1092,16 @@ win.chanstuff["output"].style.height = winhigh-inhigh-36+"px";
 win.chanstuff["input"].style.top = winhigh-inhigh+"px";
 }
 
+window.focusTopic = function(event){
+var tmp = event.target.parentNode.parentNode;//target(topic)->topicdiv->win OR target(textnode)->topic->topicdiv->win
+if(tmp.cont) currenttopic = event.target.parentNode;
+else currenttopic = event.target.parentNode.parentNode;
+currenttopic.style.height = "auto";
+}
+window.unfocusTopic = function(){
+currenttopic.style.height = "18px";
+}
+
 window.gettarget = function(target){
 tmp = target;
 target = target.toLowerCase();
@@ -1099,7 +1127,13 @@ case "J":
     return sendCommand("JOIN "+params.join(" "));
 break;
 case "QUERY":
-    addMessage(params[0],colorize(irc.nick)+": "+params.slice(1).join(" "));
+    var m = params.slice(1).join(" ");
+    if(m)
+        addMessage(params[0],colorize(irc.nick)+": "+m);
+    else{
+        gettarget(params[0]);
+        return;
+    }
 case "MSG":
     return sendCommand("PRIVMSG "+params.join(" "));
 break;
@@ -1157,7 +1191,7 @@ window.inputEvent = function(event){
         } else {
             var lines = data.split("\n");
             while(data = lines.shift()){
-                addMessage(event.currentTarget.sendto,colorize(irc["nick"])+": <span style='color:#888;'>"+irc2html(irc.prepend+data)+"</span>");
+                addMessage(event.currentTarget.sendto,colorize(irc["nick"])+": "+irc2html(irc.prepend+data));
                 sendCommand("PRIVMSG "+event.currentTarget.sendto+" :"+irc.prepend+data);
             }
         }
@@ -1270,12 +1304,21 @@ window.updateUsers = function(win){
         li.style.listStyle = "none";
         li.style.whiteSpace = "nowrap";
         li.style.fontSize = "12px";
+        li.style.cursor = "pointer";
         li.innerHTML += " "+colorize(win.chanstuff.users[u][0]);
+        bind(li,"dblclick",queryUser);
         win.chanstuff.userlist.appendChild(li);
     }
 }
 window.partChan = function(win){
 raw("PART "+win.chanstuff.input.sendto);
+}
+window.queryUser = function(event){
+    var tmp = event.target;
+    if(tmp.firstChild) tmp = tmp.firstChild;
+    if(tmp.nextSibling) tmp = tmp.nextSibling;
+    if(tmp.firstChild) tmp = tmp.firstChild;//should be a text node by this point
+    wintotop({"target":{"cont":gettarget(tmp.nodeValue)} })
 }
 
 
@@ -1360,7 +1403,10 @@ socket.onStarted = function(){
 return false;
 }
 socket.close = function(){raw("QUIT");};
-
+socket.reload = function(){
+var m = getSwf();
+m.src = "ircsocket.swf?v="+(new Date()).valueOf();
+};
 
 window.onload = function(){
 pageLoaded();
