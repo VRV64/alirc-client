@@ -3,9 +3,15 @@ function raw(data){
 	return true;
 }
 function ircstartup(){
-irc["nick"] = document.getElementById("nick").value;
-raw("USER al-"+irc["nick"]+" 8 0 :"+irc["nick"]);
-raw("NICK "+irc["nick"]);
+    irc["nick"] = document.getElementById("nick").value;
+    try{
+        irc["user"] = document.getElementById("user").value;
+        if(!irc["user"]) irc["user"] = irc["nick"];
+    } catch(e) {
+        irc["user"] = irc["nick"];
+    }
+    raw("USER al-"+irc["user"]+" 8 0 :"+irc["nick"]);
+    raw("NICK "+irc["nick"]);
 }
 function sendCommand(data){
 raw(data);
@@ -275,7 +281,7 @@ function ircdata(data){
 		case "001":
             irc.serverlink = userhost[0];
             irc.stable = true;
-            socket.onStarted();
+            window.setTimeout(socket.onStarted,300);
         break;
 		case "002":
 		case "003":/* 001-004 can't be used because irc.server doesn't exist yet :( */
@@ -297,7 +303,8 @@ function ircdata(data){
                         raw("protoctl namesx");// /names will send all statuses
                     break;
                     case 'NETWORK':
-                        irc.server = keyval[1];                        
+                        irc.server = keyval[1];
+                        gettarget(irc.server).closebutton.removeEventListener("click",deletewin);
                     break;
                     case 'PREFIX':
                         var pref = keyval[1].match(/\((.*)\)(.*)/);
@@ -443,7 +450,7 @@ function ircdata(data){
             }
         break;
 		default:
-			addMessage(userhost[0],params.slice(1).join(" ").concat(": ",message));
+			addMessage(irc.server,data);
 		break;
 	}
 }
@@ -459,6 +466,7 @@ function addMessage(nam,html,hideTime,noCount){
     p.innerHTML += html;
     p.style.margin = "0px";
     p.style.fontSize = "12px";
+    p.style.textAlign = "left";
     var target = gettarget(nam);
     var output = target.chanstuff["output"];
     var willScroll = (output.clientHeight+output.scrollTop >= output.scrollHeight);
@@ -1055,16 +1063,20 @@ input.style.position = "absolute";
 output.style.position = "absolute";
 topicdiv.style.position = "absolute";
 output.style.border = ui["sepborder"];
-topicdiv.style.top = "18px";
+topicdiv.style.top = (18+ui["winpad"])+"px";
 topicdiv.style.height = "18px";
 topicdiv.style.overflow = "hidden";
 topicdiv.style.fontSize = "12px";
-output.style.top = "36px";
+topicdiv.style.border = ui["winborder"];
+topicdiv.style.cursor = "default";
+output.style.top = (36+ui["winpad"]*2)+"px";
 output.style.width = "100%";
 output.style.overflowY = "scroll";
 output.style.overflowX = "auto";
 input.style.width = "100%";
 input.style.height = "36px";
+input.style.padding = "0px";
+input.style.backgroundColor = ui["inputbackground"];
 bind(input,"keydown",inputEvent);
 
 input.sendto = username;
@@ -1073,7 +1085,8 @@ win.chanstuff = {
 "input":input,
 "scroll":[],
 "currentScroll":0,
-"userhost":userhost
+"userhost":userhost,
+"topic":topicdiv
 }
 win.appendChild(input);
 win.appendChild(output);
@@ -1086,9 +1099,17 @@ targetmap[username] = win;
 return win;
 }
 window.adjustuserui = function(win){
-var inhigh = parseInt(win.chanstuff["input"].style.height);
+/*var inhigh = parseInt(win.chanstuff["input"].style.height);
 var winhigh = parseInt(win.cont.style.height);
 win.chanstuff["output"].style.height = winhigh-inhigh-36+"px";
+win.chanstuff["input"].style.top = winhigh-inhigh+"px";*/
+var winwidth = parseInt(win.cont.style.width);
+win.chanstuff["topic"].style.width = winwidth+"px";
+win.chanstuff["input"].style.width = winwidth+"px";
+win.chanstuff["output"].style.width = winwidth+"px";
+var inhigh = parseInt(win.chanstuff["input"].style.height);
+var winhigh = parseInt(win.cont.style.height);
+win.chanstuff["output"].style.height = winhigh-inhigh-36-ui["winpad"]*3+"px";
 win.chanstuff["input"].style.top = winhigh-inhigh+"px";
 }
 
@@ -1388,8 +1409,19 @@ function irc_onClose(){
         socket.onClose();
 }
 socket.connect = function(){
-socket.irc.connect("irc.bitsjointirc.net",6667,"xmlsocket://irc.bitsjointirc.net:8002");
-}
+    socket.irc.connect("irc.bitsjointirc.net",6667,"xmlsocket://irc.bitsjointirc.net:8002");
+    window.onunload = socket.close;
+    window.onbeforeunload = function(event){
+	    if(!event) event = window.event;
+	    event.cancelBubble = true;
+	    event.returnValue = 'If you leave this page, your chat session will end. Are you sure you want to leave this page?';
+	    if (event.stopPropagation) {
+		    event.stopPropagation();
+		    event.preventDefault();
+	    }
+        return 'If you leave this page, your chat session will end. Are you sure you want to leave this page?';
+    };
+};
 socket.onReady = function(){
 //socket.irc.connect("irc.pokesplash.net",6667,"xmlsocket://irc.pokesplash.net:8002");
 document.getElementById("msg").innerHTML = "ready!";};
@@ -1400,7 +1432,18 @@ ircdata(data);//addMessage("*Server*",data);
 };
 socket.onError = function(error){document.getElementById("msg").innerHTML += "Error: "+error+"<br>";};
 socket.onStarted = function(){
-return false;
+    try{
+        var nspass = document.getElementById("pass").value;
+        if(nspass) raw("NS IDENTIFY "+nspass);
+    } catch(e) {
+    }
+    try{
+        var joinch = document.getElementById("chans").value;
+        if(joinch) raw('join '+joinch);
+        else raw('join #pokesplash');
+    } catch(e) {
+        raw('join #pokesplash');
+    }
 }
 socket.close = function(){raw("QUIT");};
 socket.reload = function(){
@@ -1412,16 +1455,6 @@ window.onload = function(){
 pageLoaded();
 window.setTimeout(init,1000);
 }
-window.onunload = socket.close;
-window.onbeforeunload = function(event){
-	if(!event) event = window.event;
-	event.cancelBubble = true;
-	event.returnValue = 'If you leave this page, your chat session will end. Are you sure you want to leave this page?';
-	if (event.stopPropagation) {
-		event.stopPropagation();
-		event.preventDefault();
-	}
-};
 
 window.onblur = function(event){
 window.pagefocused = false;
