@@ -1008,6 +1008,8 @@ input.style.width = "100%";
 input.style.height = "36px";
 input.style.padding = "0px";
 input.style.backgroundColor = ui["inputbackground"];
+input.style.color = ui["color"];
+input.style.border = ui["winborder"];
 bind(input,"keydown",inputEvent);
 bind(topic,"mouseover",focusTopic);
 bind(topic,"mouseout",unfocusTopic);
@@ -1077,6 +1079,8 @@ input.style.width = "100%";
 input.style.height = "36px";
 input.style.padding = "0px";
 input.style.backgroundColor = ui["inputbackground"];
+input.style.color = ui["color"];
+input.style.border = ui["winborder"];
 bind(input,"keydown",inputEvent);
 
 input.sendto = username;
