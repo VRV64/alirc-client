@@ -1,6 +1,6 @@
 function raw(data){
-	socket.irc.send(data);
-	return true;
+    socket.irc.send(data);
+    return true;
 }
 function ircstartup(){
     irc["nick"] = document.getElementById("nick").value;
@@ -17,18 +17,18 @@ function sendCommand(data){
 raw(data);
 }
 function ircdata(data){
-	if(data.substr(0,4)=="PING"){
-		raw("PO".concat(data.substring(2)));
+    if(data.substr(0,4)=="PING"){
+        raw("PO".concat(data.substring(2)));
         raw("PING "+(new Date()).valueOf())
         return;
-	}
-	var chunks = data.split(":");
-	var params = chunks[1].split(" ");
-	var message = chunks.slice(2).join(":");
-	var cmd = params[1];
-	var userhost = params[0].split(/(.+)!(.+)@(.+)/).slice(1,3);
-	if(!userhost.length) userhost = [params[0], "", params[0]];
-	switch(cmd){
+    }
+    var chunks = data.split(":");
+    var params = chunks[1].split(" ");
+    var message = chunks.slice(2).join(":");
+    var cmd = params[1];
+    var userhost = params[0].split(/(.+)!(.+)@(.+)/).slice(1,3);
+    if(!userhost.length) userhost = [params[0], "", params[0]];
+    switch(cmd){
         case "JOIN":
             if(isMe(userhost[0])){
                 raw("MODE "+message);
@@ -265,31 +265,31 @@ function ircdata(data){
             chan.chanstuff.topic.parentNode.setAttribute("title","Topic set by "+userhost[0]+" on "+d.toLocaleString());
             
         break;
-		/* Show message, nothing else */
-		case "251"://lusers
-		case "255":
-		case "265":
-		case "266":
+        /* Show message, nothing else */
+        case "251"://lusers
+        case "255":
+        case "265":
+        case "266":
         case "290"://helpop
         case "291":
         case "292":
-		case "372"://motd
-		case "375":
-			addMessage(irc.server,message);
-		break;
-		/* Show nothing at all */
-		case "001":
+        case "372"://motd
+        case "375":
+            addMessage(irc.server,message);
+        break;
+        /* Show nothing at all */
+        case "001":
             irc.serverlink = userhost[0];
             irc.stable = true;
             window.setTimeout(socket.onStarted,300);
         break;
-		case "002":
-		case "003":/* 001-004 can't be used because irc.server doesn't exist yet :( */
-		case "004":
+        case "002":
+        case "003":/* 001-004 can't be used because irc.server doesn't exist yet :( */
+        case "004":
         case "366"://end names
-		case "376"://end motd
-		break;
-		case "005":
+        case "376"://end motd
+        break;
+        case "005":
             for(var p in params){
                 keyval = params[p].split("=");
                 switch(keyval[0]){
@@ -315,12 +315,12 @@ function ircdata(data){
                 }
             }
         break;
-		/* Param[2] + message */
-		case "252":
-		case "253":
-		case "254":
-			addMessage(irc.server,params[2].concat(" ",message));
-		break;
+        /* Param[2] + message */
+        case "252":
+        case "253":
+        case "254":
+            addMessage(irc.server,params[2].concat(" ",message));
+        break;
         /* current window: message (param[3]) */
         case "401":
             addMessage(currentwin.win.chanstuff["input"].sendto,message+" ("+colorize(param[3])+")");
@@ -449,10 +449,10 @@ function ircdata(data){
                 addMessage(currentwin.win.chanstuff["input"].sendto,message);
             }
         break;
-		default:
-			addMessage(irc.server,data);
-		break;
-	}
+        default:
+            addMessage(irc.server,data);
+        break;
+    }
 }
 window.isMe = function(nick){
 if(nick.toLowerCase()==irc['nick'].toLowerCase()) return true;
@@ -640,13 +640,13 @@ window.colorize = function(str){
 }
 
 function trimstatus(str) {
-	for (var i = 0; i < str.length; i++) {
-		if (irc["chstatus"].indexOf(str.charAt(i)) === -1) {
-			str = str.substring(i);
-			break;
-		}
-	}
-	return str;
+    for (var i = 0; i < str.length; i++) {
+        if (irc["chstatus"].indexOf(str.charAt(i)) === -1) {
+            str = str.substring(i);
+            break;
+        }
+    }
+    return str;
 }
 function in_users(needle,haystack){
     needle = needle.toLowerCase();
@@ -804,9 +804,9 @@ newuserwin("u"+i);
 
 window.bind = function(element,event,method){
 if(element.addEventListener)
-	element.addEventListener(event,method,false);
+    element.addEventListener(event,method,false);
 else
-	element.attachEvent("on"+event,method);
+    element.attachEvent("on"+event,method);
 }
 window.winobj = function(titletext){
 var wincont = document.createElement("div");
@@ -1412,13 +1412,13 @@ socket.connect = function(){
     socket.irc.connect("irc.bitsjointirc.net",6667,"xmlsocket://irc.bitsjointirc.net:8002");
     window.onunload = socket.close;
     window.onbeforeunload = function(event){
-	    if(!event) event = window.event;
-	    event.cancelBubble = true;
-	    event.returnValue = 'If you leave this page, your chat session will end. Are you sure you want to leave this page?';
-	    if (event.stopPropagation) {
-		    event.stopPropagation();
-		    event.preventDefault();
-	    }
+        if(!event) event = window.event;
+        event.cancelBubble = true;
+        event.returnValue = 'If you leave this page, your chat session will end. Are you sure you want to leave this page?';
+        if (event.stopPropagation) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
         return 'If you leave this page, your chat session will end. Are you sure you want to leave this page?';
     };
 };
