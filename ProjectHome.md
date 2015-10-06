@@ -1,0 +1,1 @@
+Integration between IRC and Javascript using a socket binding.
